@@ -9,7 +9,6 @@ import android.graphics.Rect;
 import android.support.v7.widget.LinearLayoutManager;
 import android.text.TextUtils;
 import android.util.AttributeSet;
-import android.util.Log;
 import android.util.TypedValue;
 import android.view.MotionEvent;
 import android.view.View;
@@ -356,7 +355,6 @@ public class IndexBar extends View {
         if (!isSourceDatasAlreadySorted) {
             //排序sourceDatas
             mDataHelper.sortSourceDatas(mSourceDatas);
-
         } else {
             //汉语->拼音
             mDataHelper.convert(mSourceDatas);

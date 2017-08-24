@@ -4,10 +4,10 @@
           android:id="@+id/tvName"
           android:layout_width="wrap_content"
           android:layout_height="35dp"
-          android:layout_marginBottom="15dp"
-          android:background="@drawable/meituan_iten_header_item_bg"
-          android:gravity="center"
-          android:minWidth="90dp"
-          android:textColor="#666666"
-          android:textSize="14sp"
-          tools:text="上海背景"/>
+    android:layout_marginBottom="15dp"
+    android:background="@drawable/meituan_iten_header_item_bg"
+    android:gravity="center"
+    android:minWidth="90dp"
+    android:textColor="#666666"
+    android:textSize="14sp"
+    tools:text="上海背景"/>

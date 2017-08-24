@@ -2,14 +2,20 @@ package com.empty.citylistchange;
 
 import android.content.Context;
 import android.graphics.Rect;
+import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.util.Log;
 import android.util.TypedValue;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.EditText;
 import android.widget.GridView;
 import android.widget.ListAdapter;
 import android.widget.TextView;
@@ -21,7 +27,7 @@ import com.mcxtzhang.indexlib.suspension.SuspensionDecoration;
 
 import java.util.ArrayList;
 import java.util.List;
-
+import java.util.Map;
 
 
 /**
@@ -37,7 +43,7 @@ public class MeituanSelectCityActivity extends AppCompatActivity {
     private MeituanAdapter mAdapter;
     private HeaderRecyclerAndFooterWrapperAdapter mHeaderAdapter;
     private LinearLayoutManager mManager;
-//    private GridView grid;
+    private EditText text_edit;
 
     //设置给InexBar、ItemDecoration的完整数据集
     private List<BaseIndexPinyinBean> mSourceDatas;
@@ -45,6 +51,7 @@ public class MeituanSelectCityActivity extends AppCompatActivity {
     private List<MeituanHeaderBean> mHeaderDatas;
     //主体部分数据源（城市数据）
     private List<MeiTuanBean> mBodyDatas;
+    private List<MeiTuanBean> mBodySearchDatas;//要搜索的城市列表
 
     private SuspensionDecoration mDecoration;
 
@@ -59,19 +66,55 @@ public class MeituanSelectCityActivity extends AppCompatActivity {
     private TextView mTvSideBarHint;
     private int indexnow = 1;
 
+    List<String> list = new ArrayList<>();
+    private Object searchLock = new Object();
+    private SearchListTask mSearchListTask;
+    private String searchString;
+    boolean inSearchMode = false;
+    List<String> recentCitys;//最近访问的城市
+    List<String> hotCitys;//热门城市
+    private ResolveCity mResolveCity;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_meituan);
         mContext = this;
+        mBodySearchDatas = new ArrayList<>();
 
         mRv = (RecyclerView) findViewById(R.id.rv);
         mRv.setLayoutManager(mManager = new LinearLayoutManager(this));
-//        grid = (GridView) findViewById(R.id.grid);
+        text_edit = (EditText) findViewById(R.id.text_edit);
 
         mSourceDatas = new ArrayList<>();
         mHeaderDatas = new ArrayList<>();
+        mBodyDatas = new ArrayList<>();
+        mResolveCity = new ResolveCity(this);
+        mResolveCity.initJsonData();
+
+        Init_List();
+
+        //使用indexBar
+        mTvSideBarHint = (TextView) findViewById(R.id.tvSideBarHint);//HintTextView
+        mIndexBar = (IndexBar) findViewById(R.id.indexBar);//IndexBar
+        mAdapter = new MeituanAdapter(this, R.layout.meituan_item_select_city, mBodyDatas);
+        mRv.addItemDecoration(new DividerItemDecoration(mContext, DividerItemDecoration.VERTICAL_LIST));
+
+        Init_CityList();
+        Init_Search();
+
+        mRv.addItemDecoration(mDecoration = new SuspensionDecoration(this, mSourceDatas)
+                .setmTitleHeight((int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 35, getResources().getDisplayMetrics()))
+                .setColorTitleBg(0xffefefef)
+                .setTitleFontSize((int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 16, getResources().getDisplayMetrics()))
+                .setColorTitleFont(mContext.getResources().getColor(android.R.color.black))
+                .setHeaderViewCount(mHeaderAdapter.getHeaderViewCount() - mHeaderDatas.size()));
+
+        initDatas(getResources().getStringArray(R.array.provinces));
+    }
+
+    private void Init_List(){
         List<String> locationCity = new ArrayList<>();
         locationCity.add("定位中");
         mHeaderDatas.add(new MeituanHeaderBean(locationCity, "定位城市", "定"));
@@ -80,11 +123,10 @@ public class MeituanSelectCityActivity extends AppCompatActivity {
         List<String> hotCitys = new ArrayList<>();
         mHeaderDatas.add(new MeituanHeaderBean(hotCitys, "热门城市", "热"));
         mSourceDatas.addAll(mHeaderDatas);
-        final List<String> list = new ArrayList<>();
+    }
 
+    private void Init_CityList(){
 
-
-        mAdapter = new MeituanAdapter(this, R.layout.meituan_item_select_city, mBodyDatas);
         mHeaderAdapter = new HeaderRecyclerAndFooterWrapperAdapter(mAdapter) {
             @Override
             protected void onBindHeaderHolder(final ViewHolder holder, int headerPos, int layoutId, Object o) {
@@ -117,18 +159,15 @@ public class MeituanSelectCityActivity extends AppCompatActivity {
                                 //网格
                                 RecyclerView recyclerView = holder.getView(R.id.rvCity);
                                 if (indexnow == 1){
-//                                    recyclerView.setVisibility(View.VISIBLE);
-                                    list.add("安家");
-                                    list.add("盐亭");
-                                    list.add("三台");
-                                    list.add("塔山");
-                                    list.add("龙树");
+                                    Map<String, String[]> mAreaDataslist = mResolveCity.mAreaDatasMap;
+                                    String[] nameKey = mAreaDataslist.get("绵阳");
+                                    for (String citylist :nameKey){
+                                        list.add(citylist);
+                                    }
                                     indexnow = 2;
                                 }else{
                                     indexnow = 1;
-//                                    recyclerView.setVisibility(View.GONE);
                                     list.clear();
-
                                 }
                                 recyclerView.setAdapter(
                                         new CommonAdapter<String>(mContext, R.layout.meituan_item_header_item, meituanTopHeaderBean.getCityList()) {
@@ -161,17 +200,12 @@ public class MeituanSelectCityActivity extends AppCompatActivity {
 
 
         mRv.setAdapter(mHeaderAdapter);
-        mRv.addItemDecoration(mDecoration = new SuspensionDecoration(this, mSourceDatas)
-                .setmTitleHeight((int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 35, getResources().getDisplayMetrics()))
-                .setColorTitleBg(0xffefefef)
-                .setTitleFontSize((int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 16, getResources().getDisplayMetrics()))
-                .setColorTitleFont(mContext.getResources().getColor(android.R.color.black))
-                .setHeaderViewCount(mHeaderAdapter.getHeaderViewCount() - mHeaderDatas.size()));
-        mRv.addItemDecoration(new DividerItemDecoration(mContext, DividerItemDecoration.VERTICAL_LIST));
+
+
 
         //使用indexBar
-        mTvSideBarHint = (TextView) findViewById(R.id.tvSideBarHint);//HintTextView
-        mIndexBar = (IndexBar) findViewById(R.id.indexBar);//IndexBar
+//        mTvSideBarHint = (TextView) findViewById(R.id.tvSideBarHint);//HintTextView
+//        mIndexBar = (IndexBar) findViewById(R.id.indexBar);//IndexBar
 
         mIndexBar.setmPressedShowTextView(mTvSideBarHint)//设置HintTextView
                 .setNeedRealIndex(true)//设置需要真实的索引
@@ -179,26 +213,6 @@ public class MeituanSelectCityActivity extends AppCompatActivity {
                 .setHeaderViewCount(mHeaderAdapter.getHeaderViewCount() - mHeaderDatas.size());
 
 
-        initDatas(getResources().getStringArray(R.array.provinces));
-//        initDatas();
-    }
-    // 动态加载GridView 高度
-    public static void setListViewHeightBasedOnChildren(GridView myGridView) {
-        ListAdapter listAdapter = myGridView.getAdapter();
-        if (listAdapter == null) {
-            return;
-        }
-        int col = 5;
-        int totalHeight = 0;
-        for (int i = 0; i < listAdapter.getCount(); i += col) {
-            View listItem = listAdapter.getView(i, null, myGridView);
-            listItem.measure(0, 0);
-            totalHeight += listItem.getMeasuredHeight();
-        }
-        ViewGroup.LayoutParams params = myGridView.getLayoutParams();
-        params.height = totalHeight;
-//        ((MarginLayoutParams) params).setMargins(10, 10, 10, 10);
-        myGridView.setLayoutParams(params);
     }
 
     /**
@@ -212,15 +226,18 @@ public class MeituanSelectCityActivity extends AppCompatActivity {
         getWindow().getDecorView().postDelayed(new Runnable() {
             @Override
             public void run() {
-                mBodyDatas = new ArrayList<>();
+
+
+                mBodyDatas.clear();
                 for (int i = 0; i < data.length; i++) {
                     MeiTuanBean cityBean = new MeiTuanBean();
                     cityBean.setCity(data[i]);//设置城市名称
                     mBodyDatas.add(cityBean);
+
                 }
                 //先排序
                 mIndexBar.getDataHelper().sortSourceDatas(mBodyDatas);
-
+                Log.v("thiscity",mBodyDatas.get(0).getSuspensionTag()+"         城市收索       "+mBodyDatas.get(0).getCity());
                 mAdapter.setDatas(mBodyDatas);
                 mHeaderAdapter.notifyDataSetChanged();
                 mSourceDatas.addAll(mBodyDatas);
@@ -240,13 +257,13 @@ public class MeituanSelectCityActivity extends AppCompatActivity {
                 header1.getCityList().add("上海");
 
                 MeituanHeaderBean header2 = mHeaderDatas.get(1);
-                List<String> recentCitys = new ArrayList<>();
+                recentCitys = new ArrayList<>();
                 recentCitys.add("成都");
                 recentCitys.add("绵阳");
                 header2.setCityList(recentCitys);
 
                 MeituanHeaderBean header3 = mHeaderDatas.get(2);
-                List<String> hotCitys = new ArrayList<>();
+                hotCitys = new ArrayList<>();
                 hotCitys.add("上海");
                 hotCitys.add("北京");
                 hotCitys.add("杭州");
@@ -259,6 +276,145 @@ public class MeituanSelectCityActivity extends AppCompatActivity {
             }
         }, 2000);
 
+    }
+
+    private void Init_Search(){
+        text_edit.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                if (s.length()>0){
+                    searchString = text_edit.getText().toString().trim().toUpperCase();
+
+                    if (mSearchListTask != null
+                            && mSearchListTask.getStatus() != AsyncTask.Status.FINISHED)
+                    {
+                        try
+                        {
+                            mSearchListTask.cancel(true);
+                        } catch (Exception e)
+                        {
+                            Log.i("thiscity", "Fail to cancel running search task");
+                        }
+
+                    }
+                    mSearchListTask = new SearchListTask();
+                    mSearchListTask.execute(searchString);
+                }else{
+                    Init_List();
+                    mAdapter = new MeituanAdapter(MeituanSelectCityActivity.this, R.layout.meituan_item_select_city, mBodyDatas);
+
+                    Init_CityList();
+//                    //先排序
+//                    mIndexBar.getDataHelper().sortSourceDatas(mBodyDatas);
+//
+                    mAdapter.setDatas(mBodyDatas);
+                    mHeaderAdapter.notifyDataSetChanged();
+                    mSourceDatas.addAll(mBodyDatas);
+
+                    new Handler().postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+
+                            mIndexBar.setmSourceDatas(mSourceDatas)//设置数据
+                                    .invalidate();
+                            mDecoration.setmDatas(mSourceDatas);
+                        }
+                    },200);
+
+
+
+                    MeituanHeaderBean header1 = mHeaderDatas.get(0);
+                    header1.getCityList().clear();
+                    header1.getCityList().add("上海");
+
+                    MeituanHeaderBean header2 = mHeaderDatas.get(1);
+                    header2.setCityList(recentCitys);
+
+                    MeituanHeaderBean header3 = mHeaderDatas.get(2);
+                    header3.setCityList(hotCitys);
+
+                    mHeaderAdapter.notifyItemRangeChanged(1, 3);
+                }
+            }
+        });
+    }
+
+    private class SearchListTask extends AsyncTask<String, Void, String>
+    {
+
+        @Override
+        protected String doInBackground(String... params)
+        {
+            mBodySearchDatas.clear();
+
+            String keyword = params[0];
+
+            inSearchMode = (keyword.length() > 0);
+
+            if (inSearchMode)
+            {
+                // get all the items matching this
+                for (MeiTuanBean item : mBodyDatas)
+                {
+//                    CityItem contact = (CityItem) item;
+
+                    boolean isPinyin = item.getSuspensionTag().toUpperCase().indexOf(keyword) > -1;
+                    boolean isChinese = item.getCity().indexOf(keyword) > -1;
+
+                    if (isPinyin || isChinese)
+                    {
+                        mBodySearchDatas.add(item);
+                    }
+
+                }
+
+            }
+            return null;
+        }
+
+        protected void onPostExecute(String result)
+        {
+
+            synchronized (searchLock)
+            {
+
+                if (inSearchMode)
+                {
+                    mHeaderDatas.clear();
+                    mSourceDatas.clear();
+                    mAdapter = new MeituanAdapter(MeituanSelectCityActivity.this, R.layout.meituan_item_select_city, mBodySearchDatas);
+                    mRv.setAdapter(mAdapter);
+//                    mRv.addItemDecoration(mDecoration = new SuspensionDecoration(MeituanSelectCityActivity.this, mSourceDatas)
+//                            .setmTitleHeight((int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 35, getResources().getDisplayMetrics()))
+//                            .setColorTitleBg(0xffefefef)
+//                            .setTitleFontSize((int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 16, getResources().getDisplayMetrics()))
+//                            .setColorTitleFont(mContext.getResources().getColor(android.R.color.black))
+//                            .setHeaderViewCount(mHeaderAdapter.getHeaderViewCount() - mHeaderDatas.size()));
+//                    mRv.addItemDecoration(new DividerItemDecoration(mContext, DividerItemDecoration.VERTICAL_LIST));
+//
+//
+//
+//                    mIndexBar.setmPressedShowTextView(mTvSideBarHint)//设置HintTextView
+//                            .setNeedRealIndex(true)//设置需要真实的索引
+//                            .setmLayoutManager(mManager)//设置RecyclerView的LayoutManager
+//                            .setHeaderViewCount(mHeaderAdapter.getHeaderViewCount() - mHeaderDatas.size());
+                } else
+                {
+
+                }
+            }
+
+        }
     }
 
 }

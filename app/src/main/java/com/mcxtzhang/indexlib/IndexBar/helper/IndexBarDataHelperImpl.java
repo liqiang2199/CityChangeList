@@ -2,15 +2,10 @@ package com.mcxtzhang.indexlib.IndexBar.helper;
 
 import android.util.Log;
 
-import com.empty.citylistchange.Cn2Spell;
-import com.github.promeg.pinyinhelper.Pinyin;
+import com.github.stuxuhai.jpinyin.PinyinException;
+import com.github.stuxuhai.jpinyin.PinyinFormat;
+import com.github.stuxuhai.jpinyin.PinyinHelper;
 import com.mcxtzhang.indexlib.IndexBar.bean.BaseIndexPinyinBean;
-
-import net.sourceforge.pinyin4j.PinyinHelper;
-import net.sourceforge.pinyin4j.format.HanyuPinyinCaseType;
-import net.sourceforge.pinyin4j.format.HanyuPinyinOutputFormat;
-import net.sourceforge.pinyin4j.format.HanyuPinyinToneType;
-import net.sourceforge.pinyin4j.format.exception.BadHanyuPinyinOutputFormatCombination;
 
 import java.util.Collections;
 import java.util.Comparator;
@@ -44,51 +39,35 @@ public class IndexBarDataHelperImpl implements IIndexBarDataHelper {
         for (int i = 0; i < size; i++) {
             BaseIndexPinyinBean indexPinyinBean = datas.get(i);
             StringBuilder pySb = new StringBuilder();
-            //add by zhangxutong 2016 11 10 如果不是top 才转拼音，否则不用转了
+            // 如果不是top 才转拼音，否则不用转了
             if (indexPinyinBean.isNeedToPinyin()) {
                 String target = indexPinyinBean.getTarget();//取出需要被拼音化的字段
+
                 //遍历target的每个char得到它的全拼音
                 for (int i1 = 0; i1 < target.length(); i1++) {
                     //利用TinyPinyin将char转成拼音
                     //查看源码，方法内 如果char为汉字，则返回大写拼音
                     //如果c不是汉字，则返回String.valueOf(c)
-//                    Log.v("  thiscity   ","  设置城市    "+Pinyin.toPinyin(target.charAt(i1)).toUpperCase());
-                    Log.v("  thiscity   ","  设置城市    "+ Cn2Spell.getInstance().getSelling(target));
-                    pySb.append(Cn2Spell.getInstance().getSelling(target).toUpperCase());
+
+
+//                    pySb.append(Pinyin.toPinyin(target.charAt(i1)).toUpperCase());
+                    try {
+                        pySb.append(PinyinHelper.convertToPinyinString(target, "", PinyinFormat.WITHOUT_TONE).toUpperCase());
+                    } catch (PinyinException e) {
+                        e.printStackTrace();
+                    }
+//                    pySb.append(characterParser.getSellingWithPolyphone(target).toUpperCase());
                 }
+
                 indexPinyinBean.setBaseIndexPinyin(pySb.toString());//设置城市名全拼音
             } else {
                 //pySb.append(indexPinyinBean.getBaseIndexPinyin());
             }
         }
+//        Log.v("thiscity","   汉字 转成拼音   "+ characterParser.getSellingWithPolyphone("泸州"));
         return this;
     }
 
-
-    /**
-          * 汉字转为拼音
-          * @param chinese
-          * @return
-          */
-    public static String ToPinyin(String chinese){
-                String pinyinStr = "";
-               char[] newChar = chinese.toCharArray();
-               HanyuPinyinOutputFormat defaultFormat = new HanyuPinyinOutputFormat();
-                defaultFormat.setCaseType(HanyuPinyinCaseType.LOWERCASE);
-               defaultFormat.setToneType(HanyuPinyinToneType.WITHOUT_TONE);
-                for (int i = 0; i < newChar.length; i++) {
-                        if (newChar[i] > 128) {
-                                try {
-                                        pinyinStr += PinyinHelper.toHanyuPinyinStringArray(newChar[i], defaultFormat)[0];
-                                   } catch (BadHanyuPinyinOutputFormatCombination e) {
-                                       e.printStackTrace();
-                                   }
-                            }else{
-                                pinyinStr += newChar[i];
-                           }
-                    }
-                return pinyinStr;
-         }
     /**
      * 如果需要取出，则
      * 取出首字母->tag,或者特殊字母 "#".
@@ -128,7 +107,6 @@ public class IndexBarDataHelperImpl implements IIndexBarDataHelper {
         Collections.sort(datas, new Comparator<BaseIndexPinyinBean>() {
             @Override
             public int compare(BaseIndexPinyinBean lhs, BaseIndexPinyinBean rhs) {
-                Log.v("thiscity",rhs.getBaseIndexPinyin()+"  排序sourceDatas   "+lhs.getBaseIndexPinyin());
                 if (!lhs.isNeedToPinyin()) {
                     return 0;
                 } else if (!rhs.isNeedToPinyin()) {
