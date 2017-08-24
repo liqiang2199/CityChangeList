@@ -128,6 +128,7 @@ public class MeituanSelectCityActivity extends AppCompatActivity {
                                     indexnow = 1;
 //                                    recyclerView.setVisibility(View.GONE);
                                     list.clear();
+
                                 }
                                 recyclerView.setAdapter(
                                         new CommonAdapter<String>(mContext, R.layout.meituan_item_header_item, meituanTopHeaderBean.getCityList()) {
