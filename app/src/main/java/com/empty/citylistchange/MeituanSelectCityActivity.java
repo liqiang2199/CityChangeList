@@ -269,6 +269,7 @@ public class MeituanSelectCityActivity extends AppCompatActivity {
                 hotCitys.add("杭州");
                 hotCitys.add("广州");
                 hotCitys.add("成都");
+                hotCitys.add("绵阳");
                 header3.setCityList(hotCitys);
 
                 mHeaderAdapter.notifyItemRangeChanged(1, 3);
